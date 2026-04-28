@@ -1,0 +1,16 @@
+# Railway — Scraper service configuration
+#
+# Setup steps:
+# 1. Create a new Railway project and add a service pointing to this repo.
+# 2. In the service settings, set "Root Directory" to "scraper/".
+#    Railway will then use scraper/Dockerfile as the build file.
+# 3. Add a Cron schedule in the service settings:
+#    Recommended: "0 8 * * *"  (daily at 08:00 UTC = 10:00 Madrid summer / 09:00 winter)
+# 4. Add environment variables in Railway (copy from scraper/.env.example).
+
+[build]
+builder = "DOCKERFILE"
+
+[deploy]
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 3
