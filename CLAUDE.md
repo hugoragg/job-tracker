@@ -149,3 +149,49 @@ The scraper deploys to Railway using `job-tracker/scraper/Dockerfile`. Railway's
 | Arthur D. Little | iCIMS portal at `internships-adlittle.icims.com/jobs/search?...&searchLocation=13549--Madrid&...` shows real job listings only inside a same-origin `?in_iframe=1` sub-frame. Direct loads of either the outer URL or the iframe URL return only the branded shell (~200 chars text) — iCIMS appears to gate content behind referer/cookie state we can't reproduce headlessly. User-confirmed there is currently 1 Madrid posting ("Intern", `/jobs/1457/intern/job`). Skipped 2026-05-12 — revisit (consider stateful session + Referer chain, or finding an iCIMS public feed URL). |
 | BNP Paribas CIB | `careers.cib.bnpparibas/job-offers/?_contract_types=internship&_where_to_work=spain` (also tried `?_job_search=madrid&_where_to_work=spain`) triggers `ERR_HTTP2_PROTOCOL_ERROR` on first load; even with `--disable-http2`, headless Chromium hits 120s `domcontentloaded` timeout, body stays at 0 bytes. httpx probes on `/wp-json/...` and `/wp-admin/admin-ajax.php` time out too. Skipped 2026-05-12 — revisit. |
 | Bain | `www.bain.com/careers/find-a-role/?filters=workareas(1831443)\|offices(214)` is fully behind Cloudflare. Real-Chrome channel + stealth tweaks (webdriver=undefined, plugins, languages) still leave the page stuck at "Performing security verification". Skipped 2026-05-12 — revisit (would need browser-managed CF cookie like cloudscraper / undetected-chromedriver). |
+
+## Daily email digest plan (pending — do not implement until user signals)
+
+User has approved the design but not the build. **Wait for explicit go-ahead before writing code.** The verification table above is the foundation this feature builds on.
+
+### Goal
+Daily email at **07:00 Madrid local time** with two sections, run through a Claude API filter so only postings matching the user's career interests reach the inbox.
+
+### Section A — "New today"
+- Postings whose URL was NOT in the DB before today's scrape.
+- `db.upsert_jobs` already returns this list (`db.py:47`).
+- On day 0 (first run after this feature is enabled) the diff includes everything — that's expected behaviour, no special case.
+
+### Section B — "Last 7 days"
+- All postings with `first_seen_at >= NOW() - INTERVAL '7 days' AND is_active = true`.
+- 7-day rolling window: each posting lives in emails for 7 days from first sighting; if it disappears from the scrape earlier (`is_active = false`), it drops off immediately.
+- `first_seen_at` already exists in the `jobs` table (`schema.sql:29`) — no schema migration needed.
+- **Section A jobs also appear in Section B** (user-confirmed). Both sections render independently, duplication is intentional.
+
+### AI filter step
+Before rendering the email, both candidate lists are passed through a single Anthropic SDK call from a new module `ai_filter.py`. **Not a separate API service** — implemented as an in-process SDK call to avoid extra deploy/infra.
+
+- **Behavior:** hard-drop irrelevant jobs. The email shows the filtered list only. **When in doubt, the filter must KEEP the job** (false negatives are worse than false positives).
+- **Criteria source:** `job-tracker/scraper/config/preferences.md` (user-maintained, loaded into the system prompt). Seed criteria from the user:
+  - Early careers / first-year jobs / internships
+  - Finance, Investment Banking, Global Markets, Data Analysis, Consulting, AI
+  - **Special attention to OFF-CYCLE internships** (preferred)
+  - Summer internships
+  - Private Equity, Hedge Fund, Venture Capital, Investment Funds
+  - Roles like Investment Analyst
+  - (These are examples — the AI interprets each posting against the full `preferences.md`.)
+- **Model:** Claude Sonnet 4.6 or Haiku 4.5 — small payload, low cost.
+- **Prompt caching:** cache the system prompt + `preferences.md` (stable across runs).
+- **Fallback:** on API error or missing `ANTHROPIC_API_KEY`, send the email unfiltered. Never block the email.
+
+### Implementation pointers (for when the go-ahead is given)
+- New module `src/ai_filter.py` exposing `async def filter_jobs(jobs: list[Job], preferences: str) -> list[Job]`.
+- New file `config/preferences.md` (user-authored — do NOT pre-fill from CLAUDE.md examples without user input).
+- Extend `email_digest.send_digest(new_today, last_7_days)` to render two sections (current signature takes one list).
+- Update `main.run()` to:
+  1. Run scrape + `upsert_jobs` as today.
+  2. Query DB for the 7-day window.
+  3. Pass both lists through `ai_filter.filter_jobs`.
+  4. Call `send_digest` with both filtered lists.
+- Add `ANTHROPIC_API_KEY` to `.env.example` and Railway env vars.
+- Cron schedule: 07:00 Madrid year-round → needs DST handling. Either (a) two Railway cron entries (`0 5 * * *` summer + `0 6 * * *` winter, swapped manually), or (b) a single cron at both `0 5 * * *` and `0 6 * * *` with a code-level guard that exits early if `datetime.now(zoneinfo.ZoneInfo("Europe/Madrid")).hour != 7`. Option (b) is preferred — no manual DST swap.
