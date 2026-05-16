@@ -1,504 +1,250 @@
 # Job Tracker — Company Configuration
 # =====================================
-# default_location_filter is applied to every company unless overridden.
-# Matching is case-insensitive substring.
+# All URLs verified by user — April 2026
+# Only companies with confirmed career portals included
 
 default_location_filter: "Madrid"
 
 companies:
 
-# ══════════════════════════════════════════════════════════════════════════════
-# GREENHOUSE — direct JSON API (fast, no browser needed)
-# Endpoint: https://boards-api.greenhouse.io/v1/boards/{greenhouse_id}/jobs
-# ══════════════════════════════════════════════════════════════════════════════
-
-  # ── Global PE / Investment Firms ─────────────────────────────────────────────
-  - name: "Blackstone"
-    ats: greenhouse
-    greenhouse_id: "blackstone"
-
-  - name: "KKR"
-    ats: greenhouse
-    greenhouse_id: "kkr"
-
-  - name: "Permira"
-    ats: greenhouse
-    greenhouse_id: "permira"
-
-  - name: "Cinven"
-    ats: greenhouse
-    greenhouse_id: "cinven"
-
-  - name: "CVC Capital Partners"
-    ats: greenhouse
-    greenhouse_id: "cvccapitalpartners"
-
-  - name: "EQT"
-    ats: greenhouse
-    greenhouse_id: "eqtgroup"
-
-  - name: "Bain Capital"
-    ats: greenhouse
-    greenhouse_id: "baincapital"
-
-  - name: "General Atlantic"
-    ats: greenhouse
-    greenhouse_id: "generalatlantic"
-
-  - name: "Advent"
-    ats: greenhouse
-    greenhouse_id: "adventinternational"
-
-  - name: "Apax Partners"
-    ats: greenhouse
-    greenhouse_id: "apaxpartners"
-
-  - name: "Bridgepoint"
-    ats: greenhouse
-    greenhouse_id: "bridgepointgroup"
-
-  - name: "Portobello Capital"
-    ats: greenhouse
-    greenhouse_id: "portabellocapital"
-
-  - name: "Arcano"
-    ats: greenhouse
-    greenhouse_id: "arcanopartners"
-
-  - name: "Alantra"
-    ats: greenhouse
-    greenhouse_id: "alantra"
-
-  - name: "Seaya"
-    ats: greenhouse
-    greenhouse_id: "seaya"
-
-  - name: "Kibo Ventures"
-    ats: greenhouse
-    greenhouse_id: "kiboventures"
-
-  # ── Investment Banks ──────────────────────────────────────────────────────────
-  - name: "Houlihan Lokey"
-    ats: greenhouse
-    greenhouse_id: "houlihanlokey"
-
-  - name: "Jefferies"
-    ats: greenhouse
-    greenhouse_id: "jefferies"
-
-  - name: "Lazard"
-    ats: greenhouse
-    greenhouse_id: "lazard"
-
-  - name: "Moelis"
-    ats: greenhouse
-    greenhouse_id: "moelis"
-
-  - name: "Evercore"
-    ats: greenhouse
-    greenhouse_id: "evercore"
-
-  - name: "Centerview Partners"
-    ats: greenhouse
-    greenhouse_id: "centerviewpartners"
-
-  - name: "Parella Weiberg"
-    ats: greenhouse
-    greenhouse_id: "pwp"
-
-  - name: "Greenhill"
-    ats: greenhouse
-    greenhouse_id: "greenhill"
-
-  # ── Asset Management ──────────────────────────────────────────────────────────
-  - name: "Amundi"
-    ats: greenhouse
-    greenhouse_id: "amundi"
-
-  - name: "Schroders"
-    ats: greenhouse
-    greenhouse_id: "schroders"
-
-  - name: "Fidelity International"
-    ats: greenhouse
-    greenhouse_id: "fidelityinternational"
-
-  - name: "Nuveen"
-    ats: greenhouse
-    greenhouse_id: "nuveen"
-
-  - name: "Colliers"
-    ats: greenhouse
-    greenhouse_id: "colliers"
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# LEVER — direct JSON API (fast, no browser needed)
-# Endpoint: https://api.lever.co/v0/postings/{lever_id}?mode=json
-# ══════════════════════════════════════════════════════════════════════════════
-
-  - name: "Roland Berger"
-    ats: lever
-    lever_id: "rolandberger"
-
-  - name: "Oliver Wyman"
-    ats: lever
-    lever_id: "oliverwyman"
-
-  - name: "Kearney"
-    ats: lever
-    lever_id: "kearney"
-
-  - name: "Alvarez & Marsal"
-    ats: lever
-    lever_id: "alvarezandmarsal"
-
-  - name: "L.E.K. Consulting"
-    ats: lever
-    lever_id: "lek"
-
-  - name: "FTI Consulting"
-    ats: lever
-    lever_id: "fticonsulting"
-
-  - name: "Mediobanca"
-    ats: lever
-    lever_id: "mediobanca"
-
-  - name: "Natixis"
-    ats: lever
-    lever_id: "natixis"
-
-  - name: "ICG (Intermediate Capital Group)"
-    ats: lever
-    lever_id: "icg"
-
-  - name: "Samaipata"
-    ats: lever
-    lever_id: "samaipata"
-
-
-# ══════════════════════════════════════════════════════════════════════════════
-# WORKDAY / CUSTOM ATS — requires Playwright (headless browser)
-# These firms use proprietary portals. careers_url points to the Madrid
-# filtered search page where possible.
-# ══════════════════════════════════════════════════════════════════════════════
-
-  # ── Bulge Bracket Banks ───────────────────────────────────────────────────────
-  - name: "Goldman Sachs"
-    ats: playwright
-    careers_url: "https://www.goldmansachs.com/careers/search#"
-    # NOTE: Uses TAL.net — verify IDs before trusting results
-
-  - name: "JP Morgan"
-    ats: playwright
-    careers_url: "https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX"
-
-  - name: "Morgan Stanley"
-    ats: playwright
-    careers_url: "https://morganstanley.tal.net/vx/lang-en-GB/mobile-0/brand-2/candidate/jobboard/vacancy/1/adv/"
-
-  - name: "Citi"
-    ats: playwright
-    careers_url: "https://jobs.citi.com/search-jobs/Madrid"
-
-  - name: "Barclays"
-    ats: playwright
-    careers_url: "https://search.jobs.barclays/search-jobs/Madrid"
-
-  - name: "UBS"
-    ats: playwright
-    careers_url: "https://jobs.ubs.com/TGWebHost/searchjobs.aspx"
-
-  - name: "Deutsche Bank"
-    ats: playwright
-    careers_url: "https://careers.db.com/professionals/search-roles/#/"
-
-  - name: "HSBC"
-    ats: playwright
-    careers_url: "https://mycareer.hsbc.com/en_GB/external/SearchJobs/Madrid"
-
-  - name: "BNP Paribas"
-    ats: playwright
-    careers_url: "https://group.bnpparibas/en/careers"
-
-  - name: "Bank of America"
-    ats: playwright
-    careers_url: "https://careers.bankofamerica.com/en-us/search-jobs/madrid/spain"
-
-  - name: "Credit Agricole CIB"
-    ats: playwright
-    careers_url: "https://careers.ca-cib.com/en/job-offers?location=Madrid"
-
-  - name: "Societe General CIB"
-    ats: playwright
-    careers_url: "https://careers.societegenerale.com/en/job-offers?location=Madrid"
-
-  - name: "Nomura"
-    ats: playwright
-    careers_url: "https://nomura.tal.net/vx/lang-en-GB/mobile-0/brand-5/candidate/jobboard/vacancy/1/adv/"
-
-  - name: "RBC Capital Markets"
-    ats: playwright
-    careers_url: "https://jobs.rbc.com/ca/en/search-results?keywords=Madrid"
-
-  - name: "Wells Fargo"
-    ats: playwright
-    careers_url: "https://www.wellsfargo.com/about/careers/"
-
-  - name: "Commerzbank"
-    ats: playwright
-    careers_url: "https://careers.commerzbank.com/en/jobs?location=Madrid"
-
-  - name: "Standard Chartered"
-    ats: playwright
-    careers_url: "https://scb.taleo.net/careersection/ex/jobsearch.ftl"
-
-  - name: "Mizuho"
-    ats: playwright
-    careers_url: "https://www.mizuhogroup.com/careers"
-
-  - name: "MUFG"
-    ats: playwright
-    careers_url: "https://careers.mufg.jp/english/"
-
-  - name: "Macquarie"
-    ats: playwright
-    careers_url: "https://careers.macquarie.com/en/search?location=Madrid"
-
-  - name: "ING"
-    ats: playwright
-    careers_url: "https://www.ing.jobs/spain/"
-
-  - name: "Rothschild"
-    ats: playwright
-    careers_url: "https://www.rothschildandco.com/en/careers/"
-
-  # ── Spanish Banks ─────────────────────────────────────────────────────────────
-  - name: "BBVA"
-    ats: playwright
-    careers_url: "https://careers.bbva.com/es/empleo/"
-
-  - name: "Santander"
-    ats: playwright
-    careers_url: "https://www.bancosantander.es/empleo"
-
-  - name: "CaixaBank"
-    ats: playwright
-    careers_url: "https://www.caixabank.es/empleo/"
-
-  - name: "Bankinter"
-    ats: playwright
-    careers_url: "https://empleo.bankinter.com/"
-
-  - name: "Banca March"
-    ats: playwright
-    careers_url: "https://www.bancamarch.es/es/particular/trabaja-con-nosotros/"
-
-  # ── Big Consulting ────────────────────────────────────────────────────────────
-  - name: "McKinsey"
-    ats: playwright
-    careers_url: "https://www.mckinsey.com/careers/search-jobs#Madrid"
-
-  - name: "BCG"
-    ats: playwright
-    careers_url: "https://careers.bcg.com/search-jobs?location=Madrid"
-
-  - name: "Bain"
-    ats: playwright
-    careers_url: "https://www.bain.com/careers/find-a-role/"
-
-  - name: "Deloitte"
-    ats: playwright
-    careers_url: "https://apply.deloitte.com/careers/SearchJobs/Madrid"
-
-  - name: "EY"
-    ats: playwright
-    careers_url: "https://careers.ey.com/ey/search/#madrid"
-
-  - name: "PwC"
-    ats: playwright
-    careers_url: "https://www.pwc.es/es/empleo.html"
-
-  - name: "KPMG"
-    ats: playwright
-    careers_url: "https://home.kpmg/es/es/home/careers.html"
-
-  - name: "Accenture"
-    ats: playwright
-    careers_url: "https://www.accenture.com/es-es/careers/jobsearch?jk=&sb=1&vw=1&is_rj=0&ct=madrid"
-
-  - name: "Arthur D. Little"
-    ats: playwright
-    careers_url: "https://www.adlittle.com/en/careers"
-
-  - name: "Management Solutions"
-    ats: playwright
-    careers_url: "https://www.managementsolutions.com/empleo"
-
-  - name: "Afi (Analistas Financieros)"
-    ats: playwright
-    careers_url: "https://www.afi.es/trabaja-con-nosotros/"
-
-  # ── Global PE (custom portals) ────────────────────────────────────────────────
-  - name: "BlackRock"
-    ats: playwright
-    careers_url: "https://careers.blackrock.com/job-search-results/?location=Madrid"
-
-  - name: "Apollo Global Management"
-    ats: playwright
-    careers_url: "https://www.apollo.com/about/careers"
-
-  - name: "Carlyle Group"
-    ats: playwright
-    careers_url: "https://www.carlyle.com/about-carlyle/team/join-carlyle"
-
-  - name: "Warburg Pincus"
-    ats: playwright
-    careers_url: "https://www.warburgpincus.com/careers/"
-
-  - name: "Ares Management"
-    ats: playwright
-    careers_url: "https://www.aresmgmt.com/careers"
-
-  - name: "PAI Partners"
-    ats: playwright
-    careers_url: "https://www.paipartners.com/careers/"
-
-  - name: "H.I.G. Capital"
-    ats: playwright
-    careers_url: "https://www.higcapital.com/careers/"
-
-  - name: "ICG (Intermediate Capital Group)"
-    ats: playwright
-    careers_url: "https://www.icgam.com/careers/"
-
-  - name: "AltamarCAM"
-    ats: playwright
-    careers_url: "https://www.altamarcam.com/es/talento"
-
-  - name: "ProA Capital"
-    ats: playwright
-    careers_url: "https://www.proacapital.com/en/team/"
-
-  - name: "Nazca Capital"
-    ats: playwright
-    careers_url: "https://www.nazcacapital.es/equipo/"
-
-  - name: "Realza Capital"
-    ats: playwright
-    careers_url: "https://www.realzacapital.com/equipo/"
-
-  - name: "Diana Capital"
-    ats: playwright
-    careers_url: "https://www.dianacapital.com/equipo/"
-
-  - name: "Miura Partners"
-    ats: playwright
-    careers_url: "https://www.miurapartners.com/equipo/"
-
-  - name: "GED Capital"
-    ats: playwright
-    careers_url: "https://www.gedcapital.com/equipo/"
-
-  - name: "Qualitas Equity"
-    ats: playwright
-    careers_url: "https://qualitasequity.com/equipo/"
-
-  # ── Asset Management ──────────────────────────────────────────────────────────
-  - name: "Pictet"
-    ats: playwright
-    careers_url: "https://www.group.pictet/careers"
-
-  - name: "Bestinver"
-    ats: playwright
-    careers_url: "https://www.bestinver.es/sobre-bestinver/empleo/"
-
-  - name: "Cobas Asset Management"
-    ats: playwright
-    careers_url: "https://cobas-am.com/trabaja-con-nosotros/"
-
-  - name: "azValor"
-    ats: playwright
-    careers_url: "https://azvalor.com/trabaja-con-nosotros/"
-
-  - name: "Mutuactivos"
-    ats: playwright
-    careers_url: "https://www.mutuactivos.es/empleo/"
-
-  - name: "Mapfre Inversión"
-    ats: playwright
-    careers_url: "https://empleo.mapfre.com/"
-
-  # ── Spanish IB Boutiques ──────────────────────────────────────────────────────
-  - name: "AZ Capital"
-    ats: playwright
-    careers_url: "https://www.azcapital.es/unete-al-equipo/"
-
   - name: "Abante"
     ats: playwright
-    careers_url: "https://www.abante.es/trabaja-con-nosotros/"
+    careers_url: "https://www.abanteasesores.com/quienes-somos/trabaja-con-nosotros/ofertas-de-empleo/"
 
-  - name: "DC Advisory"
+  - name: "Accenture Strategy"
     ats: playwright
-    careers_url: "https://www.dcadvisory.com/careers/"
-
-  - name: "GBS Finance"
-    ats: playwright
-    careers_url: "https://www.gbsfinance.es/trabaja-con-nosotros/"
+    careers_url: "https://www.accenture.com/es-es/careers/jobsearch?jk=&sb=1&vw=1&is_rj=0&pg=1&ct=madrid&ba=strategy%20%26%20consulting"
 
   - name: "Accuracy"
     ats: playwright
-    careers_url: "https://accuracy.com/careers/"
+    careers_url: "https://app-accuracy.bc.direct/recruitment/career/5ee62d016b800f0fc8e70d1c?page=1&limit=10&offices=5f3f74e3fff8cae8b728466b"
+
+  - name: "Alantra"
+    ats: playwright
+    careers_url: "https://www.alantra.com/careers/apply/"
+
+  - name: "Alvarez & Marsal"
+    ats: playwright
+    careers_url: "https://careers.alvarezandmarsal.com/search/jobs/within/25/miles/of/40.41672790000001/-3.7032905?ns_location=Madrid%2C%20Espa%C3%B1a"
+
+  - name: "Amundi"
+    ats: playwright
+    careers_url: "https://jobs.amundi.com/job/list-of-jobs.aspx"
 
   - name: "Aquila Capital"
-    ats: playwright
-    careers_url: "https://www.aquila-capital.de/en/about-us/career/"
+    ats: workday
+    careers_url: "https://aquilacapital.wd3.myworkdayjobs.com/AquilaCapital?locations=3b74a6c100fd1001028c52019ef90000"
 
-  - name: "Asterion"
+  - name: "Arcano"
     ats: playwright
-    careers_url: "https://www.asterion.es/equipo/"
+    careers_url: "https://talento.arcanopartners.com/en-GB/jobs"
 
-  - name: "Beka Finance"
+  - name: "Ares Management"
     ats: playwright
-    careers_url: "https://www.bekafinance.com/trabaja-con-nosotros/"
+    careers_url: "https://apptrkr.io/ares-management/ares-management-2025-2026"
 
-  - name: "JB Capital Markets"
+  - name: "Arthur D. Little"
     ats: playwright
-    careers_url: "https://www.jbcapital.es/equipo/"
+    careers_url: "https://internships-adlittle.icims.com/jobs/search?ss=1&searchLocation=13549--Madrid&mobile=false&width=1171&height=500&bga=true&needsRedirect=false&jan1offset=-300&jun1offset=-240"
+
+  - name: "BBVA CIB"
+    ats: workday
+    careers_url: "https://bbva.wd3.myworkdayjobs.com/BBVA?AreaBBVA=4e7e381f49d210181652f4fa97930000&locationCountry=bd34c524a6a04ae6915f5d96fa086199&locationRegionStateProvince=0321ceabe7ca4740bd2d5f2e2e6e5d68"
+
+  - name: "BCG"
+    ats: playwright
+    careers_url: "https://careers.bcg.com/global/en/search-results"
+
+  - name: "BDO Spain"
+    ats: playwright
+    careers_url: "https://bdo.epreselec.com/Ofertas/Ofertas.aspx"
+
+  - name: "BNP Paribas CIB"
+    ats: playwright
+    careers_url: "https://careers.cib.bnpparibas/job-offers/?_contract_types=internship&_where_to_work=spain"
+
+  - name: "Bain"
+    ats: playwright
+    careers_url: "https://www.bain.com/careers/work-with-us/internships-programs/"
+
+  - name: "Bank of America"
+    ats: playwright
+    careers_url: "https://careers.bankofamerica.com/en-us/students/job-search?ref=search&start=0&rows=10&search=jobsByLocation&searchstring=Madrid%2C+Spain"
+
+  - name: "Barclays"
+    ats: playwright
+    careers_url: "https://search.jobs.barclays/search-jobs?acm=8736272&alrpm=2921044,3017382,2510769,2750405,2802361,2963597,2960313,2264397,2661886,3175395&ascf=[%7B%22key%22:%22ALL%22,%22value%22:%22%22%7D]"
+
+  - name: "Acciona"
+    ats: playwright
+    careers_url: "https://www.acciona.com/our-purpose/work-with-us/job-offers?_adin=0183579827"
+    acciona_division: "Corporación_Business_Line"
+
+  - name: "Bestinver"
+    ats: playwright
+    careers_url: "https://www.acciona.com/our-purpose/work-with-us/job-offers?_adin=0183579827"
+    acciona_division: "Bestinver_Business_Line"
+
+  - name: "BlackRock"
+    ats: playwright
+    careers_url: "https://careers.blackrock.com/location/spain-jobs/45831/2510769/2"
+
+  - name: "CVC Capital Partners"
+    ats: playwright
+    careers_url: "https://apptrkr.io/cvc-credit/cvc-credit-off-cycle-intern-programme-london-frankfurt?utm_source=Trackr&utm_medium=tracker&utm_campaign=EU_Finance_2026"
+
+  - name: "CaixaBank"
+    ats: playwright
+    careers_url: "https://caixabankcareers.com/search/?createNewAlert=false&q=&locationsearch=Madrid"
+
+  - name: "Cinven"
+    ats: playwright
+    careers_url: "https://cinven.pinpointhq.com/"
+
+  - name: "Citi"
+    ats: playwright
+    careers_url: "https://jobs.citi.com/search-jobs/Madrid%2C%20Madrid/287/4/2510769-3117732-6355233-6359304-3117735/40x4165/-3x70256/50/2"
+
+  - name: "Colliers"
+    ats: playwright
+    careers_url: "https://careers.colliers.com/jobs?options=926&page=1"
+
+  - name: "Credit Agricole CIB"
+    ats: playwright
+    careers_url: "https://jobs.ca-cib.com/job/list-of-jobs.aspx"
+
+  - name: "DC Advisory"
+    ats: playwright
+    careers_url: "https://www.dcadvisory.com/careers/?location=spain&students=true"
+
+  - name: "Deloitte"
+    ats: playwright
+    careers_url: "https://empleo.es.deloitte.com/search/?createNewAlert=false&q=&locationsearch=spain&optionsFacetsDD_shifttype=&optionsFacetsDD_customfield1=&optionsFacetsDD_dept="
+
+  - name: "DeutscheBank"
+    ats: playwright
+    careers_url: "https://careers.db.com/students-graduates/Search-Programmes/#/graduate/"
+
+  - name: "EY"
+    ats: playwright
+    careers_url: "https://eyglobal.yello.co/job_boards/c1riT--B2O-KySgYWsZO1Q?locale=en"
+
+  - name: "Evercore"
+    ats: playwright
+    careers_url: "https://evercore.tal.net/vx/lang-en-GB/mobile-0/channel-1/appcentre-ext/brand-6/candidate/jobboard/vacancy/2/adv/"
+
+  - name: "Goldman Sachs"
+    ats: playwright
+    careers_url: "https://higher.gs.com/campus?LOCATION=Madrid|London&page=1&sort=RELEVANCE"
+    location_filter: "Madrid|London"
+
+  - name: "Greenhill"
+    ats: workday
+    careers_url: "https://mizuho.wd1.myworkdayjobs.com/en-US/mizuhoamericas"
+
+  - name: "HSBC"
+    ats: playwright
+    careers_url: "https://www.hsbc.com/careers/students-and-graduates/find-a-programme?page=1&programme-type=foundation-apprenticeship|graduate-programme|internship-programme|modern-apprenticeship"
+
+  - name: "Houlihan Lokey"
+    ats: workday
+    careers_url: "https://hl.wd1.myworkdayjobs.com/Campus"
+    location_filter: "Madrid|London"
+
+  - name: "ING"
+    ats: playwright
+    careers_url: "https://careers.ing.com/en/search-jobs?acm=ALL&alrpm=2510769&ascf=[%7B%22key%22:%22ALL%22,%22value%22:%22%22%7D]"
+
+  - name: "JP Morgan"
+    ats: playwright  # Oracle Cloud HCM, not Workday
+    careers_url: "https://jpmc.fa.oraclecloud.com/hcmUI/CandidateExperience/en/sites/CX_1001/jobs?lastSelectedFacet=POSTING_DATES&location=Madrid%252C+Spain&locationId=300000077294895&locationLevel=state&mode=location&selectedPostingDatesFacet=7"
+
+  - name: "Jefferies"
+    ats: playwright
+    careers_url: "https://jefferies.tal.net/vx/lang-en-GB/mobile-0/appcentre-ext/brand-4/xf-016c915b0a67/candidate/jobboard/vacancy/2/adv/?f_Item_Opportunity_84825_lk=765"
+
+  - name: "KMPG"
+    ats: playwright
+    careers_url: "https://carreras.kpmg.es/search/?createNewAlert=false&q=&locationsearch=Madrid"
+
+  - name: "Lazard"
+    ats: playwright
+    careers_url: "https://lazard-careers.tal.net/vx/lang-en-GB/appcentre-ext/brand-4/candidate/jobboard/vacancy/2/adv/"
 
   - name: "Livingstone"
     ats: playwright
-    careers_url: "https://www.livingstonepartners.com/es/careers/"
+    careers_url: "https://livingstonepartners.com/en-us/work-at-livingstone/"
 
-  - name: "Norgestion"
-    ats: playwright
-    careers_url: "https://www.norgestion.com/empleo/"
+  - name: "MUFG"
+    ats: workday
+    careers_url: "https://mufgub.wd3.myworkdayjobs.com/MUFG-EarlyCareers"
 
-  - name: "Renta 4 Corporate"
+  - name: "Macquarie"
     ats: playwright
-    careers_url: "https://www.r4.com/empleo/"
+    careers_url: "https://recruitment.macquarie.com/en_US/careers/SearchJobs/?7959=%5B421070%2C421069%5D&7959_format=14495&listFilterMode=1&jobRecordsPerPage=9&"
 
-  - name: "Prosolia"
+  - name: "McKinsey"
     ats: playwright
-    careers_url: "https://www.prosolia.com/trabaja-con-nosotros/"
+    careers_url: "https://www.mckinsey.com/careers/students/application-deadlines?degree=Undergrad&countryOfGraduation=Spain&school=&officeCountry=Spain&roleNames=Business+Analyst%2CBusiness+Analyst+Intern"
 
-  - name: "Next Energy Capital"
+  - name: "Mediobanca"
     ats: playwright
-    careers_url: "https://nextenergycapital.com/careers/"
+    careers_url: "https://www.mediobanca.com/en/work-with-us/open-positions.html"
+    location_filter: "Madrid|London"
 
-  - name: "Oquendo Capital"
+  - name: "Morgan Stanley"
     ats: playwright
-    careers_url: "https://www.oquendo.es/equipo/"
+    careers_url: "https://www.morganstanley.com/careers/career-opportunities-search?opportunity=sg#"
+    location_filter: "Madrid|London"
 
-  - name: "Tresmares Capital"
+  - name: "Nomura"
     ats: playwright
-    careers_url: "https://www.tresmares.com/equipo/"
+    careers_url: "https://nomuracampus.tal.net/vx/lang-en-GB/mobile-0/appcentre-ext/brand-4/xf-3348347fc789/candidate/jobboard/vacancy/1/adv/?f_Item_Opportunity_84825_lk=765"
+    location_filter: "Madrid|London"
 
-  - name: "Metagestión"
+  - name: "Nuveen"
     ats: playwright
-    careers_url: "https://www.metagestion.com/trabaja-con-nosotros/"
+    careers_url: "https://careers.tiaa.org/jobs?keyword=nuveen&location_type=5&location_name=Madrid%2C%20Spain"
 
-  - name: "Sabadell Corporate Finance"
+  - name: "Oliver Wyman"
     ats: playwright
-    careers_url: "https://www.sabadell.com/es/empleo/"
+    careers_url: "https://careers.marsh.com/global/en/oliver-wyman-search"
+
+  - name: "Parella Weiberg"
+    ats: playwright
+    careers_url: "https://pwpcareers.tal.net/vx/lang-en-GB/mobile-0/appcentre-pwpext/brand-4/xf-3692fcc9b38d/candidate/jobboard/vacancy/2/adv/"
+
+  - name: "Permira"
+    ats: greenhouse
+    greenhouse_id: "permiraexternalprivate"
+    careers_url: "https://job-boards.eu.greenhouse.io/permiraexternalprivate"
+
+  - name: "Price Waterhouse"
+    ats: playwright
+    careers_url: "https://www.pwc.es/es/carrera-profesional/student-job-search/results.html?wdcountry=ESP&wdjobsite=Global_Campus_Careers&wdprog=b78cd3deaf49102755292a6430e60000&wdgrade=1840265"
+    # Additional URLs:
+    #   https://www.pwc.es/es/carrera-profesional/student-job-search/results.html?wdcountry=ESP&wdjobsite=Global_Campus_Careers&wdprog=181d27aa0ec21027504f21f399fe0000&wdgrade=1840265
+    #   https://www.pwc.es/es/carrera-profesional/becas-y-practicas-profesionales/results.html?wdcountry=ESP&wdjobsite=Global_Campus_Careers&wdprog=3205d7f4e6a110274f8dbea37a590000&wdgrade=12669415
+    #   https://www.pwc.es/es/carrera-profesional/student-job-search/results.html?wdcountry=ESP&wdjobsite=Global_Campus_Careers&wdprog=3205d7f4e6a110274f8dbea37a590000&wdgrade=1840265
+
+  - name: "RBC Capital Markets"
+    ats: playwright
+    careers_url: "https://jobs.rbc.com/ca/en/capital-markets"
+
+  - name: "Rothschild"
+    ats: playwright
+    careers_url: "https://www.rothschildandco.com/en/careers/students-and-graduates/opportunities/"
+    location_filter: "Madrid|London"
+
+  - name: "Santander CIB"
+    ats: workday
+    careers_url: "https://santander.wd3.myworkdayjobs.com/en-US/SantanderCareers?jobFamilyGroup=6cefe723149d0135fb5721f61901494b&jobFamilyGroup=6cefe723149d0117884357f619014b4b&jobFamilyGroup=c0da3a6a153701be0a13ee971a017961&jobFamilyGroup=a87fd96c8752017a817569191a016958&jobFamilyGroup=135a3ebce38101e25b8ba1b819012150&source=Santander_com&locationCountry=bd34c524a6a04ae6915f5d96fa086199"
+
+  - name: "Societe General CIB"
+    ats: playwright
+    careers_url: "https://careers.societegenerale.com/en/search?refinementList[jobType][0]=INTERNSHIP&refinementList[jobType][1]=GRADUATE_JOB&refinementList[jobType][2]=APPRENTICESHIP&refinementList[jobFunction][0]=KJ697"
+
+  - name: "UBS"
+    ats: playwright
+    careers_url: "https://jobs.ubs.com/TGnewUI/Search/home/HomeWithPreLoad?partnerid=25008&siteid=5131&PageType=searchResults&SearchType=linkquery&LinkID=15232#keyWordSearch=&locationSearch="
+    location_filter: "Madrid|London"

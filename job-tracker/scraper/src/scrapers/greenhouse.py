@@ -26,7 +26,7 @@ class GreenhouseScraper(BaseScraper):
 
             # Some Greenhouse boards surface job type in custom metadata fields
             job_type = None
-            for meta in raw.get("metadata", []):
+            for meta in (raw.get("metadata") or []):
                 if "type" in (meta.get("name") or "").lower():
                     job_type = meta.get("value")
                     break

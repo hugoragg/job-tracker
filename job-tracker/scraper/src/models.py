@@ -9,6 +9,7 @@ class CompanyConfig(BaseModel):
     careers_url: str | None = None
     job_selector: str | None = None       # CSS selector hint for html scraper
     location_filter: str | None = None    # overrides ScraperConfig.default_location_filter
+    acciona_division: str | None = None   # divisionID for AccionaScraper (e.g. "Bestinver_Business_Line")
 
 
 class ScraperConfig(BaseModel):
