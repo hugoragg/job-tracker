@@ -1,12 +1,23 @@
 import asyncio
+import os
+from datetime import datetime
 from pathlib import Path
 from typing import TYPE_CHECKING
 from urllib.parse import urlparse
+from zoneinfo import ZoneInfo
 
 import yaml
 from dotenv import load_dotenv
 
-from .db import finish_scrape_run, get_client, get_or_create_company, start_scrape_run, upsert_jobs
+from .ai_filter import filter_jobs
+from .db import (
+    finish_scrape_run,
+    get_client,
+    get_jobs_last_n_days,
+    get_or_create_company,
+    start_scrape_run,
+    upsert_jobs,
+)
 from .email_digest import send_digest
 from .models import CompanyConfig, Job, ScraperConfig
 from .scrapers import (
@@ -137,10 +148,55 @@ async def run() -> None:
         for job in new_jobs:
             all_new.append((company.name, job))
 
-    send_digest(all_new)
+    # Section B candidates: every active job first seen in the last 7 days.
+    # Includes today's new jobs by construction.
+    seven_day_candidates = get_jobs_last_n_days(db, 7)
+
+    # Defensive: ensure today's new jobs are in the candidate list even under
+    # clock skew between the scraper host and Supabase.
+    existing_urls = {j.url for _, j in seven_day_candidates}
+    for company_name, job in all_new:
+        if job.url not in existing_urls:
+            seven_day_candidates.append((company_name, job))
+
+    # Single AI filter call over the 7-day window — Section A is derived by
+    # intersection, so the same job can't be kept in one section and dropped in
+    # the other.
+    filtered = await filter_jobs(seven_day_candidates)
+    new_urls = {j.url for _, j in all_new}
+    section_a = [(c, j) for (c, j) in filtered if j.url in new_urls]
+    section_b = filtered
+
+    send_digest(section_a, section_b)
     finish_scrape_run(db, run_id, len(all_new), errors)
-    print(f"\nDone — {len(all_new)} new job(s) found across {len(config.companies)} companies.")
+    print(
+        f"\nDone — {len(all_new)} new job(s) scraped, "
+        f"{len(section_a)} kept in Section A, {len(section_b)} kept in Section B."
+    )
+
+
+_TARGET_HOUR_MADRID = 7
+
+
+def _skip_off_schedule() -> bool:
+    """Return True iff SCHEDULED_RUN=1 and Madrid local hour != 07.
+
+    Railway runs the cron at both 05:00 and 06:00 UTC; whichever fires at
+    07:00 Europe/Madrid (DST-aware) actually executes the scrape.
+    """
+    if os.environ.get("SCHEDULED_RUN") != "1":
+        return False
+    now_madrid = datetime.now(ZoneInfo("Europe/Madrid"))
+    if now_madrid.hour == _TARGET_HOUR_MADRID:
+        return False
+    print(
+        f"SCHEDULED_RUN=1 but Madrid hour is {now_madrid.hour:02d} "
+        f"(target {_TARGET_HOUR_MADRID:02d}) — skipping."
+    )
+    return True
 
 
 def main() -> None:
+    if _skip_off_schedule():
+        return
     asyncio.run(run())

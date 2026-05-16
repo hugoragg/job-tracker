@@ -1,5 +1,5 @@
 import os
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 
 from supabase import Client, create_client
 
@@ -68,6 +68,36 @@ def upsert_jobs(client: Client, company_id: str, jobs: list[Job]) -> list[Job]:
         client.table("jobs").update({"is_active": False}).in_("url", list(stale_urls)).eq("company_id", company_id).execute()
 
     return new_jobs
+
+
+def get_jobs_last_n_days(client: Client, n_days: int) -> list[tuple[str, Job]]:
+    """Fetch active jobs first seen within the last `n_days`, joined with company name.
+
+    Returns (company_name, Job) pairs ordered newest-first.
+    """
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=n_days)).isoformat()
+    result = (
+        client.table("jobs")
+        .select("*, companies(name)")
+        .gte("first_seen_at", cutoff)
+        .eq("is_active", True)
+        .order("first_seen_at", desc=True)
+        .execute()
+    )
+    out: list[tuple[str, Job]] = []
+    for row in result.data or []:
+        company = (row.get("companies") or {}).get("name") or "Unknown"
+        job = Job(
+            title=row["title"],
+            url=row["url"],
+            location=row.get("location"),
+            department=row.get("department"),
+            job_type=row.get("job_type"),
+            description=row.get("description"),
+            external_id=row.get("external_id"),
+        )
+        out.append((company, job))
+    return out
 
 
 def start_scrape_run(client: Client) -> str:
