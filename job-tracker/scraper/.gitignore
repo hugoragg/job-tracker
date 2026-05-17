@@ -1,0 +1,12 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+.venv/
+
+# Local environment / secrets
+.env
+
+# Scheduled-run logs and test artifacts
+logs/
+preview_digest.html
