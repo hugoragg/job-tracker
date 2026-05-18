@@ -11,6 +11,10 @@ import sys
 import time
 from pathlib import Path
 
+# Avoid the cp1252 console crash on Windows when titles contain zero-width
+# spaces / non-ASCII chars.
+sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+
 from dotenv import load_dotenv
 
 from .ai_filter import filter_jobs
@@ -59,23 +63,26 @@ async def main() -> None:
 
     print(f"\nRunning AI filter ({sample_size} jobs through Ollama)...")
     t0 = time.monotonic()
-    filtered = await filter_jobs(sample)
+    decisions = await filter_jobs(sample)
     elapsed = time.monotonic() - t0
-    print(f"  Filtered in {elapsed:.1f}s: {len(filtered)}/{len(sample)} kept")
+    kept_urls = {d.url for d in decisions if d.keep}
+    print(f"  Filtered in {elapsed:.1f}s: {len(kept_urls)}/{len(sample)} kept")
 
     # Show what was kept vs dropped
-    kept_urls = {j.url for _, j in filtered}
+    by_url = {d.url: d for d in decisions}
     print("\nDecisions:")
     for company, job in sample:
-        flag = "[KEEP]" if job.url in kept_urls else "[DROP]"
-        print(f"  {flag} {company:30s} {job.title[:80]}")
+        d = by_url.get(job.url)
+        flag = "[KEEP]" if d and d.keep else "[DROP]"
+        reason = (d.reason if d else "(no decision)")[:60]
+        print(f"  {flag} {company:30s} {job.title[:60]}  ({reason})")
 
-    # Render the email HTML — simulate Section A = first 3 as "new today",
-    # Section B = full filtered list (the real pipeline does this from
-    # actual day-zero diff, but for preview we just split).
+    # Render the email HTML — simulate Section A = first 3 kept as "new today",
+    # Section B = all kept. The real pipeline derives these from DB state.
     print("\nRendering email HTML...")
-    section_a = filtered[:3]  # mock "new today"
-    section_b = filtered
+    kept = [(c, j) for (c, j) in sample if j.url in kept_urls]
+    section_a = kept[:3]  # mock "new today"
+    section_b = kept
     section_a_html = _render_section("Nuevos hoy", section_a)
     section_b_html = _render_section("Últimos 7 días", section_b)
     html = f"""<!DOCTYPE html>

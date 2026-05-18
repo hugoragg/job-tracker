@@ -11,8 +11,10 @@ blast radius if one call fails — only that chunk's jobs fall through
 unfiltered, the rest still get filtered normally.
 
 Fail-open semantics: if Ollama isn't reachable, a chunk times out, or a
-chunk's response fails to parse, the jobs in that chunk are KEPT (passed
-through unfiltered). Never blocks the email on a filter error.
+chunk's response fails to parse, the jobs in that chunk get a
+**passthrough decision** (`is_real=False`, `keep=True`). The caller shows
+them in the email but does NOT persist the decision to DB — so the row's
+`ai_keep` stays NULL and can be retried on a future run if desired.
 
 Hard rule baked into the system prompt: "when in doubt, KEEP". False
 negatives (dropping a relevant role) are much worse than false positives.
@@ -25,6 +27,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import dataclass
 from pathlib import Path
 
 import ollama
@@ -69,6 +72,20 @@ _SCHEMA = {
 }
 
 
+@dataclass
+class FilterDecision:
+    """One filter decision per input job.
+
+    `is_real` distinguishes a real model decision from a passthrough fallback
+    (when the chunk failed). The caller should persist only `is_real=True`
+    decisions to the DB.
+    """
+    url: str
+    keep: bool
+    reason: str
+    is_real: bool
+
+
 def _load_preferences() -> str | None:
     if not _PREFERENCES_PATH.exists():
         return None
@@ -82,12 +99,13 @@ async def _filter_batch(
     host: str,
     model: str,
     chunk_label: str,
-) -> tuple[set[str] | None, dict]:
+) -> tuple[list[FilterDecision] | None, dict]:
     """Filter one chunk through Ollama.
 
-    Returns (kept_urls, stats):
-      - kept_urls: set of URLs the model said to keep, OR ``None`` on any error
-        (the caller's contract is to pass through the whole chunk on ``None``).
+    Returns (decisions, stats):
+      - decisions: list of FilterDecision (one per input job), OR ``None`` on
+        any error (the caller's contract is to build passthrough decisions on
+        ``None``).
       - stats: dict with `input_t`, `output_t`, `duration_ms` for logging.
     """
     job_payload = [
@@ -126,27 +144,46 @@ async def _filter_batch(
         return None, {}
     try:
         data = json.loads(text)
-        decisions = data["decisions"]
+        raw_decisions = data["decisions"]
     except (json.JSONDecodeError, KeyError, TypeError) as exc:
         print(f"[ai_filter] {chunk_label}: parse failed ({exc}) -- chunk passes through")
         print(f"[ai_filter] {chunk_label}: raw response (first 300 chars): {text[:300]}")
         return None, {}
 
-    kept = {d["url"] for d in decisions if d.get("keep")}
+    # Build decisions keyed by URL, then align to input chunk so we have one
+    # decision per input job even if the model dropped or duplicated some.
+    decisions_by_url = {d["url"]: d for d in raw_decisions if isinstance(d, dict) and "url" in d}
+    decisions: list[FilterDecision] = []
+    for _, j in chunk:
+        d = decisions_by_url.get(j.url)
+        if d is None:
+            # Model didn't return a decision for this URL — passthrough.
+            decisions.append(FilterDecision(url=j.url, keep=True, reason="missing_from_model_output", is_real=False))
+        else:
+            decisions.append(
+                FilterDecision(
+                    url=j.url,
+                    keep=bool(d.get("keep")),
+                    reason=str(d.get("reason") or ""),
+                    is_real=True,
+                )
+            )
+
     stats = {
         "input_t": response.get("prompt_eval_count") or 0,
         "output_t": response.get("eval_count") or 0,
         "duration_ms": (response.get("total_duration") or 0) // 1_000_000,
     }
-    return kept, stats
+    return decisions, stats
 
 
-async def filter_jobs(jobs: list[tuple[str, Job]]) -> list[tuple[str, Job]]:
+async def filter_jobs(jobs: list[tuple[str, Job]]) -> list[FilterDecision]:
     """Filter (company, job) pairs through Ollama using preferences.md as criteria.
 
-    Splits into chunks of `_BATCH_SIZE` jobs. Per-chunk fail-open: if a chunk
-    errors out, those jobs pass through unfiltered; the rest still get
-    filtered. Returns kept jobs in input order.
+    Returns a list of FilterDecision in input order — exactly one per input
+    job. On chunk failure (or missing preferences.md), produces passthrough
+    decisions (`keep=True, is_real=False`) so the email still goes out and
+    nothing is lost. The caller persists `is_real=True` decisions to DB.
     """
     if not jobs:
         return []
@@ -154,7 +191,10 @@ async def filter_jobs(jobs: list[tuple[str, Job]]) -> list[tuple[str, Job]]:
     preferences = _load_preferences()
     if not preferences:
         print(f"[ai_filter] {_PREFERENCES_PATH} missing or empty -- passing through unfiltered.")
-        return jobs
+        return [
+            FilterDecision(url=j.url, keep=True, reason="preferences_missing", is_real=False)
+            for _, j in jobs
+        ]
 
     host = os.environ.get("OLLAMA_HOST", "http://localhost:11434")
     model = os.environ.get("OLLAMA_MODEL", _DEFAULT_MODEL)
@@ -163,7 +203,7 @@ async def filter_jobs(jobs: list[tuple[str, Job]]) -> list[tuple[str, Job]]:
     total = len(jobs)
     print(f"[ai_filter] filtering {total} jobs in {len(chunks)} chunks of up to {_BATCH_SIZE} (model: {model})")
 
-    keep_or_passthrough: set[str] = set()
+    all_decisions: list[FilterDecision] = []
     total_input_t = 0
     total_output_t = 0
     total_ms = 0
@@ -171,29 +211,32 @@ async def filter_jobs(jobs: list[tuple[str, Job]]) -> list[tuple[str, Job]]:
 
     for idx, chunk in enumerate(chunks, 1):
         label = f"chunk {idx}/{len(chunks)}"
-        kept_urls, stats = await _filter_batch(chunk, preferences, host, model, label)
-        if kept_urls is None:
-            # Chunk failed -- pass its jobs through unfiltered
-            chunk_urls = {j.url for _, j in chunk}
-            keep_or_passthrough.update(chunk_urls)
+        chunk_decisions, stats = await _filter_batch(chunk, preferences, host, model, label)
+        if chunk_decisions is None:
+            # Chunk failed -- emit passthrough decisions for every job in the chunk.
             failed_chunks += 1
+            for _, j in chunk:
+                all_decisions.append(
+                    FilterDecision(url=j.url, keep=True, reason="chunk_failed", is_real=False)
+                )
         else:
-            keep_or_passthrough.update(kept_urls)
+            all_decisions.extend(chunk_decisions)
+            kept_n = sum(1 for d in chunk_decisions if d.keep)
             total_input_t += stats.get("input_t", 0)
             total_output_t += stats.get("output_t", 0)
             total_ms += stats.get("duration_ms", 0)
-            kept_n = len(kept_urls)
             print(
                 f"[ai_filter] {label}: {len(chunk)} -> {kept_n} kept "
                 f"(in: {stats.get('input_t', 0)}t, out: {stats.get('output_t', 0)}t, "
                 f"{stats.get('duration_ms', 0)}ms)"
             )
 
-    final = [(c, j) for (c, j) in jobs if j.url in keep_or_passthrough]
+    final_kept = sum(1 for d in all_decisions if d.keep)
+    real_count = sum(1 for d in all_decisions if d.is_real)
     print(
-        f"[ai_filter] DONE: {total} -> {len(final)} kept "
-        f"(failed_chunks: {failed_chunks}/{len(chunks)}, "
+        f"[ai_filter] DONE: {total} -> {final_kept} kept "
+        f"(real_decisions: {real_count}/{total}, failed_chunks: {failed_chunks}/{len(chunks)}, "
         f"total in: {total_input_t}t, out: {total_output_t}t, "
         f"wall: {total_ms / 1000:.1f}s)"
     )
-    return final
+    return all_decisions

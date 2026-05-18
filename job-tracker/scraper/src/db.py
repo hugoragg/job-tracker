@@ -1,9 +1,14 @@
 import os
+from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from typing import TYPE_CHECKING
 
 from supabase import Client, create_client
 
 from .models import Job
+
+if TYPE_CHECKING:
+    from .ai_filter import FilterDecision
 
 
 def get_client() -> Client:
@@ -73,6 +78,10 @@ def upsert_jobs(client: Client, company_id: str, jobs: list[Job]) -> list[Job]:
 def get_jobs_last_n_days(client: Client, n_days: int) -> list[tuple[str, Job]]:
     """Fetch active jobs first seen within the last `n_days`, joined with company name.
 
+    Excludes jobs the AI filter has dropped (`ai_keep = false`). Includes jobs
+    whose `ai_keep` is NULL (decision pending / passthrough from a failed
+    chunk) so we don't silently lose them.
+
     Returns (company_name, Job) pairs ordered newest-first.
     """
     cutoff = (datetime.now(timezone.utc) - timedelta(days=n_days)).isoformat()
@@ -81,6 +90,7 @@ def get_jobs_last_n_days(client: Client, n_days: int) -> list[tuple[str, Job]]:
         .select("*, companies(name)")
         .gte("first_seen_at", cutoff)
         .eq("is_active", True)
+        .or_("ai_keep.is.null,ai_keep.eq.true")
         .order("first_seen_at", desc=True)
         .execute()
     )
@@ -98,6 +108,38 @@ def get_jobs_last_n_days(client: Client, n_days: int) -> list[tuple[str, Job]]:
         )
         out.append((company, job))
     return out
+
+
+def record_filter_decisions(client: Client, decisions: list["FilterDecision"]) -> int:
+    """Persist `ai_keep` and `ai_reason` for every real model decision.
+
+    Passthrough decisions (`is_real=False`) are skipped so the row stays
+    `ai_keep IS NULL` and can be retried on a future run if you ever
+    backfill.
+
+    Batched by (keep, reason) tuple so 340 jobs with maybe 50 distinct reasons
+    become ~50 UPDATE calls instead of 340.
+
+    Returns the number of rows updated.
+    """
+    groups: dict[tuple[bool, str], list[str]] = defaultdict(list)
+    for d in decisions:
+        if not d.is_real:
+            continue
+        # Truncate reason to avoid sending huge payloads if the model ever
+        # ignores the 100-char ask.
+        groups[(d.keep, d.reason[:500])].append(d.url)
+
+    total = 0
+    for (keep, reason), urls in groups.items():
+        (
+            client.table("jobs")
+            .update({"ai_keep": keep, "ai_reason": reason})
+            .in_("url", urls)
+            .execute()
+        )
+        total += len(urls)
+    return total
 
 
 def start_scrape_run(client: Client) -> str:

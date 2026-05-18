@@ -57,17 +57,22 @@ async def main() -> None:
     print()
 
     t0 = time.monotonic()
-    kept = await filter_jobs(SAMPLE)
+    decisions = await filter_jobs(SAMPLE)
     elapsed = time.monotonic() - t0
 
+    by_url = {d.url: d for d in decisions}
+    kept_n = sum(1 for d in decisions if d.keep)
     print(f"\nElapsed: {elapsed:.1f}s")
-    print(f"Kept {len(kept)}/{len(SAMPLE)}:")
-    for company, job in kept:
-        print(f"  [KEEP] {company}: {job.title}")
-    dropped = [(c, j) for (c, j) in SAMPLE if not any(kj.url == j.url for _, kj in kept)]
-    print(f"Dropped {len(dropped)}:")
-    for company, job in dropped:
-        print(f"  [DROP] {company}: {job.title}")
+    print(f"Kept {kept_n}/{len(SAMPLE)}:")
+    for company, job in SAMPLE:
+        d = by_url.get(job.url)
+        if d and d.keep:
+            print(f"  [KEEP] {company}: {job.title}  ({d.reason})")
+    print(f"Dropped {len(SAMPLE) - kept_n}:")
+    for company, job in SAMPLE:
+        d = by_url.get(job.url)
+        if d and not d.keep:
+            print(f"  [DROP] {company}: {job.title}  ({d.reason})")
 
 
 if __name__ == "__main__":

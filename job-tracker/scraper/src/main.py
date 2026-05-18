@@ -15,6 +15,7 @@ from .db import (
     get_client,
     get_jobs_last_n_days,
     get_or_create_company,
+    record_filter_decisions,
     start_scrape_run,
     upsert_jobs,
 )
@@ -148,30 +149,30 @@ async def run() -> None:
         for job in new_jobs:
             all_new.append((company.name, job))
 
-    # Section B candidates: every active job first seen in the last 7 days.
-    # Includes today's new jobs by construction.
-    seven_day_candidates = get_jobs_last_n_days(db, 7)
+    # === AI filter step ===
+    # Only `all_new` (URLs not seen in any prior scrape) goes through the
+    # model. Jobs that were filtered on earlier runs already have `ai_keep`
+    # set in the DB and don't get re-filtered — saves enormous CPU time on
+    # day 2+ when only a handful of new URLs appear.
+    decisions = await filter_jobs(all_new)
+    kept_new_urls = {d.url for d in decisions if d.keep}
+    section_a = [(c, j) for (c, j) in all_new if j.url in kept_new_urls]
 
-    # Defensive: ensure today's new jobs are in the candidate list even under
-    # clock skew between the scraper host and Supabase.
-    existing_urls = {j.url for _, j in seven_day_candidates}
-    for company_name, job in all_new:
-        if job.url not in existing_urls:
-            seven_day_candidates.append((company_name, job))
+    # Persist real (non-passthrough) decisions to DB. Passthrough decisions
+    # (chunk failure / missing prefs) keep ai_keep NULL so they can be
+    # retried on a future run.
+    persisted = record_filter_decisions(db, decisions)
+    print(f"  Persisted {persisted} filter decision(s) to DB.")
 
-    # Single AI filter call over the 7-day window — Section A is derived by
-    # intersection, so the same job can't be kept in one section and dropped in
-    # the other.
-    filtered = await filter_jobs(seven_day_candidates)
-    new_urls = {j.url for _, j in all_new}
-    section_a = [(c, j) for (c, j) in filtered if j.url in new_urls]
-    section_b = filtered
+    # Section B: full 7-day window, already-filtered by DB query
+    # (excludes ai_keep=false; includes ai_keep=true and NULL).
+    section_b = get_jobs_last_n_days(db, 7)
 
     send_digest(section_a, section_b)
     finish_scrape_run(db, run_id, len(all_new), errors)
     print(
-        f"\nDone — {len(all_new)} new job(s) scraped, "
-        f"{len(section_a)} kept in Section A, {len(section_b)} kept in Section B."
+        f"\nDone -- scraped {len(all_new)} new URL(s), "
+        f"{len(section_a)} kept in Section A, {len(section_b)} in Section B."
     )
 
 
