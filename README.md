@@ -1,6 +1,6 @@
 # Job Tracker
 
-A personal job-listing tracker (Madrid + London) for early-careers profiles targeting finance / IB / consulting / private equity. Every day it scrapes ~50 corporate career portals, filters the results through a local LLM against my own criteria, and sends a digest email to my inbox at 07:00.
+A personal job-listing tracker (Madrid + London) for early-careers profiles targeting finance / IB / consulting / private equity. Every day it scrapes ~50 corporate career portals, filters the results through a local LLM against my own criteria, sends a digest email to my inbox at 07:00, and serves a public Next.js dashboard on Vercel that anyone with the link can browse.
 
 ---
 
@@ -18,21 +18,27 @@ Looking for internships in investment banking, PE, consulting and markets from M
 
 ## The solution
 
-Daily pipeline in three steps:
+Daily pipeline plus a permanent public dashboard:
 
 ```
 ┌─────────────┐    ┌──────────┐    ┌────────────┐    ┌────────────┐    ┌───────┐
 │ Scrapers    │ →  │ Supabase │ →  │ AI filter  │ →  │ Email      │ →  │ Inbox │
 │ (50 portals)│    │ (Postgres)│   │ (Ollama)   │    │ (Resend)   │    │       │
-└─────────────┘    └──────────┘    └────────────┘    └────────────┘    └───────┘
+└─────────────┘    └────┬─────┘    └────────────┘    └────────────┘    └───────┘
+                        │
+                        └──→ ┌──────────────────┐   ┌─────────┐   ┌─────────┐
+                             │ Next.js frontend │ → │ Vercel  │ → │ Browser │
+                             │ (ISR every 10m)  │   │ (free)  │   │  (any)  │
+                             └──────────────────┘   └─────────┘   └─────────┘
 ```
 
 1. **Scrape**: per company, a dedicated scraper (or the generic one) extracts titles + URLs + location. Only Madrid matches (or Madrid + London depending on the company).
 2. **Upsert to Supabase**: the DB diffs URLs against what it already had. New URLs flow into the filter stage; the rest already have a persisted decision from earlier runs.
 3. **Local AI filter**: `qwen2.5:7b` running on Ollama reads `config/preferences.md` and decides KEEP / DROP for every new URL. Decisions are persisted to the DB.
 4. **Email digest**: two sections — *New today* (Section A) and *Last 7 days* (Section B). Resend sends the HTML to the inbox.
+5. **Public dashboard**: a Next.js 14 app on Vercel reads the same Supabase tables (anon key, RLS-protected) and renders the filtered listings with search and date controls. Auto-revalidates every 10 minutes via ISR — fresh data after each daily run with no manual deploy.
 
-The cron is Windows Task Scheduler, not Railway nor a remote cron. Zero cost — everything local except Supabase (free tier) and Resend (free tier).
+The cron is Windows Task Scheduler, not Railway nor a remote cron. Zero cost — everything local except Supabase (free tier), Resend (free tier), and Vercel (Hobby tier).
 
 ---
 
@@ -99,9 +105,10 @@ scrape_runs (id UUID PK, started_at, completed_at, new_jobs_found, status, error
 | DB | Supabase (Postgres + REST) | Free tier, JS and Python clients, RLS for the frontend |
 | Filter LLM | Ollama (`qwen2.5:7b`) running locally | Free, no API key, structured JSON output, sufficient quality for the problem |
 | Email | Resend | Free tier (3k/month), verifiable domain, HTML emails |
+| Dashboard | Next.js 14 + Tailwind on Vercel | Hobby tier free, auto-deploys on `git push`, ISR keeps pages fresh without rebuilds |
 | Orchestration | Python `asyncio` | Async scrapers, async filter, single event loop |
 | Scheduling | Windows Task Scheduler | Local, zero infra, `WakeToRun` + `StartWhenAvailable` cover edge cases |
-| Package mgmt | `uv` | Faster than pip, good lockfile |
+| Package mgmt | `uv` (Python) + `npm` (frontend) | Faster than pip, good lockfile / standard for Next.js |
 
 ---
 
@@ -145,6 +152,29 @@ Ollama supports `format=<json_schema>`, which **guarantees** the response valida
 ### Persistence with retry escape hatch
 
 Only real decisions (`is_real=True`) get saved to `ai_keep`/`ai_reason`. Passthrough rows stay with `ai_keep=NULL` — they still show up in Section B for 7 days, but it's visible they weren't actually filtered (for debugging) and could be retried in a future iteration.
+
+---
+
+## Public dashboard
+
+A read-only Next.js 14 app deployed on Vercel that mirrors what's in Supabase, applying the same filter as the email digest (`is_active = true AND ai_keep IS NOT FALSE`).
+
+**Live URL**: `https://<your-vercel-project>.vercel.app` (set this after your first deploy).
+
+What it shows:
+- All active listings, grouped by company, newest first
+- Title (linking to the original posting), location, department, badge with job type
+- The AI's one-line reason for each job ("Off-Cycle Internship at IB", "Compliance role at PE firm", etc.)
+- A "Filter decision pending" badge for jobs with `ai_keep = NULL` (passthrough — model didn't emit a decision)
+
+What it lets you do:
+- Full-text search across title, company, location, department, AI reason
+- Date filter chips: *Today* / *Last 7 days* / *All*
+- Live "showing N of M" counter so it's clear when filters are narrowing the list
+
+How it stays fresh: ISR with `revalidate = 600`. The page is regenerated at most every 10 minutes. After the 07:00 scrape finishes, the next visit (within 10 min) triggers a rebuild and the new jobs appear. No redeploy needed; no `git push` needed. The scraper writes to Supabase, the dashboard reads.
+
+Setup detail: see [`job-tracker/frontend/README.md`](job-tracker/frontend/README.md) for the local dev flow and the Vercel deploy steps (Root Directory must be set to `job-tracker/frontend`; env vars are `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` — the **anon** key, never the service_role key).
 
 ---
 
@@ -267,11 +297,12 @@ Aggregate summary:
 
 ## Pending / ideas
 
+- [x] **Public dashboard** — Next.js 14 on Vercel, live (see [Public dashboard](#public-dashboard)).
 - [ ] **Retry passthroughs**: in each run, also pipe jobs with `ai_keep=NULL` through the filter (not only `all_new`).
 - [ ] **Bain via cloudscraper**: try `curl_cffi` or `cloudscraper` for the Cloudflare bypass.
-- [ ] **Feedback loop**: links in the email to mark "this one was good" or "this one wasn't" → auto-tune `preferences.md`.
+- [ ] **Feedback loop**: links in the email / buttons in the dashboard to mark "this one was good" or "this one wasn't" → auto-tune `preferences.md`.
 - [ ] **Larger model**: try `qwen2.5:14b` (if RAM permits) or `gpt-oss:20b` quantized to fix the Compliance miss.
-- [ ] **Interactive frontend**: currently email-only. A Next.js dashboard with active jobs / archive / search.
+- [ ] **Personal state on the dashboard**: localStorage marks for *applied / interested / discarded* per job (no auth needed for single-user use).
 - [ ] **Server-side filters per company**: some companies expose URL filters (location, role) I'm not using. Would cut down scrape time.
 - [ ] **Exponential retries** for transient network errors in the Playwright scrapers.
 
@@ -288,6 +319,8 @@ If you peek at `git log`, development followed this progression:
 5. **Swap to local Ollama**: to avoid paying for inference. Same contract, different infra.
 6. **Refactor to filter-only-on-delta**: the key insight — only filter URLs that are new vs yesterday, persist decisions. Cuts Day N from ~2h to ~10 min.
 7. **End-to-end validation**: smoke test, e2e_small, full Day 1.
+8. **Windows Task Scheduler setup**: `WakeToRun` + `StartWhenAvailable` + 4h execution limit so the run survives DST swings and missed schedules.
+9. **Public dashboard**: Next.js 14 + Tailwind + Supabase anon read. Search, date chips, AI-reason display, "filter pending" badge. Deployed to Vercel — auto-revalidates every 10 min via ISR.
 
 Each step committed separately, with a message explaining what and why.
 
