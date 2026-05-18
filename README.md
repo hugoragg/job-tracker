@@ -159,7 +159,7 @@ Only real decisions (`is_real=True`) get saved to `ai_keep`/`ai_reason`. Passthr
 
 A read-only Next.js 14 app deployed on Vercel that mirrors what's in Supabase, applying the same filter as the email digest (`is_active = true AND ai_keep IS NOT FALSE`).
 
-**Live URL**: `https://<your-vercel-project>.vercel.app` (set this after your first deploy).
+**Live URL**: `https://job-tracker-c6yg.vercel.app/` (set this after your first deploy).
 
 What it shows:
 - All active listings, grouped by company, newest first
