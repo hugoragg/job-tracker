@@ -1,13 +1,17 @@
-import JobCard from "@/components/JobCard";
+import JobsView from "@/components/JobsView";
 import { supabase, type Job } from "@/lib/supabase";
 
-export const revalidate = 3600; // ISR: rebuild at most once per hour
+export const revalidate = 600; // ISR: rebuild at most every 10 min
 
 async function getJobs(): Promise<Job[]> {
+  // Mirror the email digest's Section B filter:
+  //   is_active = true AND (ai_keep IS NULL OR ai_keep = true)
+  // i.e. exclude only jobs the AI explicitly dropped.
   const { data, error } = await supabase
     .from("jobs")
     .select("*, companies(name)")
     .eq("is_active", true)
+    .or("ai_keep.is.null,ai_keep.eq.true")
     .order("first_seen_at", { ascending: false });
 
   if (error) throw new Error(error.message);
@@ -16,23 +20,20 @@ async function getJobs(): Promise<Job[]> {
 
 export default async function Home() {
   const jobs = await getJobs();
-
-  const byCompany = jobs.reduce<Record<string, Job[]>>((acc, job) => {
-    const name = job.companies.name;
-    (acc[name] ??= []).push(job);
-    return acc;
-  }, {});
-
-  const sortedCompanies = Object.keys(byCompany).sort();
+  const companies = Array.from(new Set(jobs.map((j) => j.companies.name))).sort();
 
   return (
     <main className="mx-auto max-w-3xl px-4 py-10">
       <header className="mb-8">
         <h1 className="text-2xl font-bold tracking-tight">Job Tracker</h1>
         <p className="mt-1 text-sm text-gray-500">
-          Madrid, Spain &mdash; {jobs.length} active listing{jobs.length !== 1 ? "s" : ""}
+          Madrid &middot; London &mdash; {jobs.length} active listing
+          {jobs.length !== 1 ? "s" : ""}
           {" across "}
-          {sortedCompanies.length} {sortedCompanies.length !== 1 ? "companies" : "company"}
+          {companies.length} {companies.length !== 1 ? "companies" : "company"}.
+          Filtered by local AI ({" "}
+          <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">qwen2.5:7b</code>) against{" "}
+          <code className="rounded bg-gray-100 px-1 py-0.5 text-[11px]">preferences.md</code>.
         </p>
       </header>
 
@@ -41,23 +42,7 @@ export default async function Home() {
           No active listings yet. Run the scraper to populate.
         </p>
       ) : (
-        <div className="space-y-10">
-          {sortedCompanies.map((company) => (
-            <section key={company}>
-              <h2 className="mb-3 flex items-center justify-between border-b border-gray-200 pb-2 text-base font-semibold">
-                {company}
-                <span className="text-sm font-normal text-gray-400">
-                  {byCompany[company].length}
-                </span>
-              </h2>
-              <ul className="space-y-2">
-                {byCompany[company].map((job) => (
-                  <JobCard key={job.id} job={job} />
-                ))}
-              </ul>
-            </section>
-          ))}
-        </div>
+        <JobsView jobs={jobs} />
       )}
     </main>
   );

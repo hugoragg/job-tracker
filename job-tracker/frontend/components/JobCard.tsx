@@ -32,6 +32,17 @@ export default function JobCard({ job }: { job: Job }) {
             </span>
           )}
         </div>
+
+        {job.ai_reason && (
+          <p className="mt-1 text-xs italic text-gray-400" title="Reason from the local AI filter">
+            “{job.ai_reason}”
+          </p>
+        )}
+        {job.ai_keep === null && (
+          <p className="mt-1 text-xs italic text-amber-600/70">
+            Filter decision pending
+          </p>
+        )}
       </div>
 
       <time

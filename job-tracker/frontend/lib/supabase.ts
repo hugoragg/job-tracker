@@ -24,5 +24,7 @@ export type Job = {
   is_active: boolean;
   first_seen_at: string;
   last_seen_at: string;
+  ai_keep: boolean | null;
+  ai_reason: string | null;
   companies: Pick<Company, "name">;
 };

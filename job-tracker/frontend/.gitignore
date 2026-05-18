@@ -1,0 +1,12 @@
+# Node
+node_modules/
+.next/
+out/
+.vercel/
+
+# Local environment
+.env.local
+.env.*.local
+
+# TypeScript cache
+tsconfig.tsbuildinfo
