@@ -1,5 +1,5 @@
 # Job Tracker
-
+  
 A personal job-listing tracker (Madrid + London) for early-careers profiles targeting finance / IB / consulting / private equity. Every day it scrapes ~50 corporate career portals, filters the results through a local LLM against my own criteria, sends a digest email to my inbox at 07:00, and serves a public Next.js dashboard on Vercel that anyone with the link can browse.
 
 ---
