@@ -1,80 +1,80 @@
 # Job Tracker
 
-Un tracker personal de ofertas de empleo (Madrid + London) para perfiles early-careers de finance / IB / consulting / private equity. Cada día scrapea ~50 portales corporativos, filtra los resultados con una IA local según mis criterios, y me manda un email digest a las 07:00 de la mañana.
+A personal job-listing tracker (Madrid + London) for early-careers profiles targeting finance / IB / consulting / private equity. Every day it scrapes ~50 corporate career portals, filters the results through a local LLM against my own criteria, and sends a digest email to my inbox at 07:00.
 
 ---
 
-## El problema
+## The problem
 
-Buscar prácticas en banca de inversión, PE, consultoría y mercados desde Madrid implica:
+Looking for internships in investment banking, PE, consulting and markets from Madrid means:
 
-- **~50 portales distintos** (Workday, Greenhouse, SAP SuccessFactors, TalentLink, Cegid TalentSoft, Yello, Phenom, iCIMS, Pinpoint, custom WordPress…). Cada uno con su quirk: Cloudflare, HTTP/2 errors, JS heavy, paginación rara, location filtering inconsistente.
-- **Ciclos de reclutamiento cortos**: muchas ofertas se cierran en 3-7 días. Si no las ves a tiempo, se pierden.
-- **Mucha basura en cada portal**: una página de carreras puede tener 500 puestos de los que 20 son relevantes (un IB rechaza puestos de retail/recepción/audit senior).
-- **No quiero gastar dinero**: el filtro AI tiene que ser local.
-- **No quiero mantener infraestructura compleja**: cron de servidor remoto, K8s, etc. Solo un PC con Windows y un cron local.
+- **~50 different portals** (Workday, Greenhouse, SAP SuccessFactors, TalentLink, Cegid TalentSoft, Yello, Phenom, iCIMS, Pinpoint, custom WordPress…). Each with its own quirks: Cloudflare, HTTP/2 errors, JS-heavy SPAs, weird pagination, inconsistent location filtering.
+- **Short recruiting cycles**: many openings close in 3-7 days. If you don't see them in time, they're gone.
+- **Lots of noise in every portal**: a careers page can have 500 listings of which 20 are relevant (an IB rejects retail / reception / senior-audit positions).
+- **I don't want to spend money**: the AI filter has to be local.
+- **I don't want to maintain complex infrastructure**: no remote-server cron, no K8s, etc. Just a Windows PC and a local cron.
 
 ---
 
-## La solución
+## The solution
 
-Pipeline diario en tres pasos:
+Daily pipeline in three steps:
 
 ```
 ┌─────────────┐    ┌──────────┐    ┌────────────┐    ┌────────────┐    ┌───────┐
 │ Scrapers    │ →  │ Supabase │ →  │ AI filter  │ →  │ Email      │ →  │ Inbox │
-│ (50 portales)│   │ (Postgres)│   │ (Ollama)   │    │ (Resend)   │    │       │
+│ (50 portals)│    │ (Postgres)│   │ (Ollama)   │    │ (Resend)   │    │       │
 └─────────────┘    └──────────┘    └────────────┘    └────────────┘    └───────┘
 ```
 
-1. **Scrape**: por cada empresa, un scraper específico (o uno genérico) extrae títulos + URLs + ubicación. Sólo los matches de Madrid (o Madrid + London según empresa).
-2. **Upsert a Supabase**: la DB compara URLs contra lo que ya tenía. Las URLs nuevas pasan a la fase del filter; el resto ya tiene decisión persistida de días anteriores.
-3. **Filter AI local**: `qwen2.5:7b` corriendo en Ollama lee `config/preferences.md` y decide KEEP / DROP para cada URL nueva. Las decisiones se persisten en la DB.
-4. **Email digest**: dos secciones — *Nuevos hoy* (Section A) y *Últimos 7 días* (Section B). Resend manda el HTML al inbox.
+1. **Scrape**: per company, a dedicated scraper (or the generic one) extracts titles + URLs + location. Only Madrid matches (or Madrid + London depending on the company).
+2. **Upsert to Supabase**: the DB diffs URLs against what it already had. New URLs flow into the filter stage; the rest already have a persisted decision from earlier runs.
+3. **Local AI filter**: `qwen2.5:7b` running on Ollama reads `config/preferences.md` and decides KEEP / DROP for every new URL. Decisions are persisted to the DB.
+4. **Email digest**: two sections — *New today* (Section A) and *Last 7 days* (Section B). Resend sends the HTML to the inbox.
 
-El cron es Windows Task Scheduler, no Railway ni cron remoto. Cero coste, todo local salvo Supabase (free tier) y Resend (free tier).
+The cron is Windows Task Scheduler, not Railway nor a remote cron. Zero cost — everything local except Supabase (free tier) and Resend (free tier).
 
 ---
 
-## Arquitectura
+## Architecture
 
 ```
 job-tracker/
-├── scraper/                    # Todo lo del scraper + filter + email
+├── scraper/                    # Everything scraper + filter + email
 │   ├── config/
-│   │   ├── companies.yaml      # Lista de empresas + URL + tipo de ATS
-│   │   └── preferences.md      # Criterios de filtrado para la IA
+│   │   ├── companies.yaml      # List of companies + URL + ATS type
+│   │   └── preferences.md      # Filtering criteria for the AI
 │   ├── src/
-│   │   ├── main.py             # Orquestación: scrape → upsert → filter → email
+│   │   ├── main.py             # Orchestration: scrape → upsert → filter → email
 │   │   ├── models.py           # Pydantic: CompanyConfig, Job, FilterDecision
 │   │   ├── db.py               # Supabase: upsert_jobs, record_filter_decisions, get_jobs_last_n_days
-│   │   ├── ai_filter.py        # Ollama call con structured JSON output + batching
-│   │   ├── email_digest.py     # Render HTML + Resend send
-│   │   └── scrapers/           # Un scraper por ATS o por empresa con custom logic
+│   │   ├── ai_filter.py        # Ollama call with structured JSON output + batching
+│   │   ├── email_digest.py     # HTML render + Resend send
+│   │   └── scrapers/           # One scraper per ATS or per company with custom logic
 │   │       ├── base.py             # Location matching (multi-city, peer-city rejection)
-│   │       ├── playwright_scraper.py  # Genérico SPA: captura XHR JSON + DOM heuristics
+│   │       ├── playwright_scraper.py  # Generic SPA: captures XHR JSON + DOM heuristics
 │   │       ├── workday.py          # Workday CXS API
 │   │       ├── greenhouse.py       # Greenhouse JSON API
 │   │       ├── lever.py            # Lever JSON API
 │   │       ├── html_scraper.py     # BeautifulSoup
-│   │       ├── sap_successfactors.py  # Para CaixaBank/Deloitte/KPMG
+│   │       ├── sap_successfactors.py  # For CaixaBank / Deloitte / KPMG
 │   │       ├── talentlink.py       # Atom feed + HTML fallback (Evercore, Jefferies, Lazard, Nomura)
 │   │       ├── cegid_talentsoft.py # ASP.NET WebForms (Amundi, Credit Agricole)
 │   │       ├── alantra.py          # WordPress admin-ajax
 │   │       ├── bcg.py              # Phenom People /widgets
 │   │       ├── mckinsey.py         # Real-Chrome + stealth bypass
-│   │       ├── morgan_stanley.py   # JSON endpoint detrás del SPA
-│   │       └── (... 8 scrapers más, uno por gotcha encontrada)
-│   ├── run_scrape.ps1          # Wrapper PowerShell que invoca Task Scheduler
+│   │       ├── morgan_stanley.py   # JSON endpoint behind the SPA
+│   │       └── (... 8 more scrapers, one per gotcha encountered)
+│   ├── run_scrape.ps1          # PowerShell wrapper invoked by Task Scheduler
 │   └── pyproject.toml          # uv-managed Python deps
 ├── supabase/
 │   └── schema.sql              # DDL: companies, jobs, scrape_runs
-├── frontend/                   # Next.js app que lee de Supabase (separada)
-├── CLAUDE.md                   # Notas técnicas detalladas (lista verified scrapers, gotchas por ATS)
-└── README.md                   # Este fichero
+├── frontend/                   # Next.js app reading from Supabase (separate deploy)
+├── CLAUDE.md                   # Detailed technical notes (verified scrapers, per-ATS gotchas)
+└── README.md                   # This file
 ```
 
-### Esquema de DB (Supabase)
+### DB schema (Supabase)
 
 ```sql
 companies   (id UUID PK, name UNIQUE, careers_url, ats_platform, created_at)
@@ -86,125 +86,125 @@ jobs        (id UUID PK, company_id FK, external_id, title, url, location, depar
 scrape_runs (id UUID PK, started_at, completed_at, new_jobs_found, status, errors JSONB)
 ```
 
-`ai_keep` es la persistencia de decisiones: `NULL`=pendiente/passthrough, `true`=keep, `false`=drop. El filtro de la query del Section B usa `ai_keep IS NOT FALSE` (incluye NULL y TRUE — lean-inclusive).
+`ai_keep` persists filter decisions: `NULL`=pending/passthrough, `true`=keep, `false`=drop. The Section B query uses `ai_keep IS NOT FALSE` (includes NULL and TRUE — lean-inclusive).
 
 ---
 
 ## Stack
 
-| Capa | Herramienta | Por qué |
+| Layer | Tool | Why |
 |---|---|---|
-| Scraping | `playwright` + `httpx` + `BeautifulSoup` | Playwright para SPAs (Workday, Phenom, etc.); httpx + BS4 para APIs directas y server-rendered HTML |
-| Browser-bypass | Playwright real-Chrome channel + stealth init | Algunas pages (DC Advisory, McKinsey) están detrás de Cloudflare; bundled Chromium se bloquea |
-| DB | Supabase (Postgres + REST) | Free tier, API JS y Python, RLS para frontend |
-| Filter LLM | Ollama (`qwen2.5:7b`) corriendo localmente | Gratis, no API key, structured JSON output, suficiente quality para el problema |
-| Email | Resend | Free tier (3k/mes), dominio verificable, HTML emails |
-| Orquestación | Python `asyncio` | Scrapers async, filter async, una sola event loop |
-| Scheduling | Windows Task Scheduler | Local, cero infra, `WakeToRun` + `StartWhenAvailable` cubren los edge cases |
-| Package mgmt | `uv` | Más rápido que pip, lockfile bueno |
+| Scraping | `playwright` + `httpx` + `BeautifulSoup` | Playwright for SPAs (Workday, Phenom, etc.); httpx + BS4 for direct APIs and server-rendered HTML |
+| Browser bypass | Playwright real-Chrome channel + stealth init | Some pages (DC Advisory, McKinsey) sit behind Cloudflare; bundled Chromium gets blocked |
+| DB | Supabase (Postgres + REST) | Free tier, JS and Python clients, RLS for the frontend |
+| Filter LLM | Ollama (`qwen2.5:7b`) running locally | Free, no API key, structured JSON output, sufficient quality for the problem |
+| Email | Resend | Free tier (3k/month), verifiable domain, HTML emails |
+| Orchestration | Python `asyncio` | Async scrapers, async filter, single event loop |
+| Scheduling | Windows Task Scheduler | Local, zero infra, `WakeToRun` + `StartWhenAvailable` cover edge cases |
+| Package mgmt | `uv` | Faster than pip, good lockfile |
 
 ---
 
-## Workflow diario
+## Daily workflow
 
-### Primer día (DB vacía)
+### Day 1 (empty DB)
 
-1. **07:00**: Task Scheduler dispara `run_scrape.ps1`
-2. **07:00-07:20**: scrape de ~50 empresas. Returns ~450 ofertas matching Madrid/London.
-3. **07:20-09:40**: `ai_filter` procesa los ~450 jobs en chunks de 25, llamando a Ollama. Cada chunk ~5-10 min en CPU. Las decisiones se persisten en `jobs.ai_keep` / `jobs.ai_reason`.
-4. **~09:40**: email con Section A (234 jobs kept hoy) + Section B (236 = 234 + algunos previos).
+1. **07:00**: Task Scheduler fires `run_scrape.ps1`
+2. **07:00-07:20**: scrape of ~50 companies. Returns ~450 listings matching Madrid/London.
+3. **07:20-09:40**: `ai_filter` processes the ~450 jobs in chunks of 25, calling Ollama. Each chunk takes ~5-10 min on CPU. Decisions persist to `jobs.ai_keep` / `jobs.ai_reason`.
+4. **~09:40**: email arrives with Section A (234 kept today) + Section B (236 = 234 + a handful from earlier).
 
-### Día N (≥2)
+### Day N (≥2)
 
-1. **07:00**: dispara la tarea
-2. **07:00-07:20**: mismo scrape de las ~50 empresas. **Crucial**: `upsert_jobs` compara cada URL contra la DB. Las que ya estaban no cuentan como "nuevas".
-3. **07:20-07:30**: el filter sólo procesa el **delta** — típicamente 5-30 jobs nuevos por día. Tarda ~5-15 min.
-4. **~07:30**: email con Section A (los nuevos kept) + Section B (todos los kept de los últimos 7 días).
+1. **07:00**: task fires
+2. **07:00-07:20**: same scrape of the ~50 companies. **Crucial**: `upsert_jobs` diffs each URL against the DB. URLs already there don't count as "new".
+3. **07:20-07:30**: the filter only processes the **delta** — typically 5-30 net-new jobs per day. Takes ~5-15 min.
+4. **~07:30**: email with Section A (the new kept ones) + Section B (everything kept in the last 7 days).
 
-Los jobs no se re-filtran nunca. Una decisión por (URL, modelo) y se queda.
+Jobs are never re-filtered. One decision per (URL, model) and it sticks.
 
 ---
 
-## Filtro AI — cómo funciona
+## AI filter — how it works
 
-El system prompt incluye:
+The system prompt contains:
 
-1. **Preámbulo fijo**: rol del modelo + regla *"when in doubt, KEEP"* + descripción del schema de output (estricto JSON con `url`, `keep`, `reason` por job).
-2. **Contenido íntegro de `config/preferences.md`**: criterios reales del candidato — secciones STRONG KEEP / KEEP IF UNCERTAIN / DROP + ejemplos concretos.
+1. **Fixed preamble**: model role + the *"when in doubt, KEEP"* rule + description of the output schema (strict JSON with `url`, `keep`, `reason` per job).
+2. **Full content of `config/preferences.md`**: the candidate's actual criteria — STRONG KEEP / KEEP IF UNCERTAIN / DROP sections with concrete examples.
 
-El user prompt es la lista JSON de jobs a evaluar (título, empresa, ubicación, departamento, URL).
+The user prompt is the JSON list of jobs to evaluate (title, company, location, department, URL).
 
 ### Batching
 
-448 jobs en una sola llamada satura el modelo (~14k tokens output, contexto sufrido en CPU). Splitea en **chunks de 25** y serializa. Cada chunk es independiente: si uno falla, sus 25 jobs pasan como passthrough (`is_real=False, keep=True`), los otros siguen.
+448 jobs in a single call saturates the model (~14k output tokens, CPU context suffers). It's split into **chunks of 25** processed serially. Each chunk is independent: if one fails, its 25 jobs pass through as `passthrough` (`is_real=False, keep=True`), the others continue.
 
 ### Structured output
 
-Ollama soporta `format=<json_schema>` que **garantiza** que la respuesta valida contra el schema. Sin esto el modelo a veces emite JSON malformado y hay que reintentar. Con esto: parsing limpio siempre.
+Ollama supports `format=<json_schema>`, which **guarantees** the response validates against the schema. Without it, the model occasionally emits malformed JSON and you have to retry. With it: clean parsing every time.
 
-### Persistencia con escape para reintento
+### Persistence with retry escape hatch
 
-Sólo decisiones reales (`is_real=True`) se guardan en `ai_keep`/`ai_reason`. Las passthrough quedan con `ai_keep=NULL` — siguen apareciendo en la sección B durante 7 días, pero queda visible que no las pasó el filtro (debugging) y podrían reintentarse en una iteración futura.
+Only real decisions (`is_real=True`) get saved to `ai_keep`/`ai_reason`. Passthrough rows stay with `ai_keep=NULL` — they still show up in Section B for 7 days, but it's visible they weren't actually filtered (for debugging) and could be retried in a future iteration.
 
 ---
 
-## Setup (cómo reproducir)
+## Setup (how to reproduce)
 
-### 1. Clonar y deps
+### 1. Clone and deps
 
 ```bash
 git clone https://github.com/hugoragg/job-tracker.git
 cd job-tracker/scraper
 uv sync
 uv run playwright install chromium --with-deps
-# Para DC Advisory / McKinsey hace falta también Chrome real:
+# For DC Advisory / McKinsey you also need real Chrome:
 uv run playwright install chrome
 ```
 
 ### 2. Supabase
 
-Crear proyecto en supabase.com (free tier), aplicar `job-tracker/supabase/schema.sql` en el SQL Editor.
+Create a project on supabase.com (free tier), apply `job-tracker/supabase/schema.sql` in the SQL Editor.
 
 ### 3. Ollama
 
 ```bash
-# Descargar de ollama.com/download
+# Download from ollama.com/download
 ollama pull qwen2.5:7b
 ```
 
-(Necesita ~5GB de RAM en runtime. Para CPU sólo es viable con modelos ≤8B.)
+(Needs ~5GB of RAM at runtime. For CPU-only inference, viable only with ≤8B models.)
 
 ### 4. Resend
 
-Cuenta en resend.com, dominio verificado o usar `onboarding@resend.dev` para tests.
+Account on resend.com, verified domain or use `onboarding@resend.dev` for tests.
 
 ### 5. .env
 
 ```bash
 cp scraper/.env.example scraper/.env
-# Rellenar: SUPABASE_URL, SUPABASE_SERVICE_KEY, RESEND_API_KEY, EMAIL_FROM, EMAIL_TO
-# Opcional: ANTHROPIC_API_KEY (NO se usa actualmente — eliminado), OLLAMA_HOST, OLLAMA_MODEL
+# Fill in: SUPABASE_URL, SUPABASE_SERVICE_KEY, RESEND_API_KEY, EMAIL_FROM, EMAIL_TO
+# Optional: OLLAMA_HOST (default http://localhost:11434), OLLAMA_MODEL (default qwen2.5:7b)
 ```
 
 ### 6. preferences.md
 
-Editar `scraper/config/preferences.md` con tus criterios reales. La estructura recomendada:
+Edit `scraper/config/preferences.md` with your real criteria. Recommended structure:
 
-- Sección "About the candidate" — perfil/seniority/geografía
-- "STRONG KEEP" — sectores y roles claramente target
-- "KEEP IF UNCERTAIN" — marginales / borderline / ambiguous
-- "DROP" — qué descartar explícitamente
+- "About the candidate" — profile / seniority / geography
+- "STRONG KEEP" — sectors and roles that are clearly on target
+- "KEEP IF UNCERTAIN" — marginals / borderline / ambiguous
+- "DROP" — what to explicitly discard
 - "Hard rule" — *"when in doubt, KEEP"*
 
 ### 7. Smoke test
 
 ```bash
-uv run python -m src.smoke_filter   # 5 jobs de ejemplo, ~2 min
-uv run python -m src.e2e_small      # 1 empresa real, full pipeline sin enviar email, ~3 min
-uv run scrape                       # full Day 1: scrape + filter + email real, ~2h 30 min
+uv run python -m src.smoke_filter   # 5 example jobs, ~2 min
+uv run python -m src.e2e_small      # 1 real company, full pipeline without email, ~3 min
+uv run scrape                       # full Day 1: scrape + filter + real email, ~2h 30min
 ```
 
-### 8. Schedule diario (Windows)
+### 8. Daily schedule (Windows)
 
 ```powershell
 $ScriptPath = '<absolute path>\job-tracker\scraper\run_scrape.ps1'
@@ -222,77 +222,77 @@ Register-ScheduledTask -TaskName 'JobTracker_Daily' -Action $Action -Trigger $Tr
 
 ## Verified scrapers
 
-Detalle por empresa (con gotchas y notas específicas) en **`CLAUDE.md`** — tabla con ~50 entries y nota de cómo se resolvió cada caso particular (Cloudflare, HTTP/2 errors, slug parsing, etc.).
+Per-company detail (with gotchas and specific notes) lives in **`CLAUDE.md`** — a table with ~50 entries and a note on how each particular case was solved (Cloudflare, HTTP/2 errors, slug parsing, etc.).
 
-Resumen agregado:
+Aggregate summary:
 
-| ATS | # empresas | Aproach |
+| ATS | # companies | Approach |
 |---|---|---|
-| Workday | 5 | API `CXS` directa, paginación por `appliedFacets` |
-| Greenhouse | 1 | API JSON, simple |
-| Playwright genérico | ~25 | Captura XHR JSON + scrape DOM con heurísticas |
-| Scraper custom dedicado | 15+ | Cada uno con su gotcha (real-Chrome, ASP.NET Forms, MongoDB IDs, etc.) |
-| Skipped (revisitar) | 4 | Bain, BNP Paribas CIB, Arthur D. Little, Greenhill — bloqueos no triviales |
+| Workday | 5 | Direct `CXS` API, pagination via `appliedFacets` |
+| Greenhouse | 1 | JSON API, simple |
+| Generic Playwright | ~25 | Capture XHR JSON + scrape DOM with heuristics |
+| Dedicated custom scraper | 15+ | One per gotcha (real-Chrome, ASP.NET Forms, MongoDB IDs, etc.) |
+| Skipped (revisit) | 4 | Bain, BNP Paribas CIB, Arthur D. Little, Greenhill — non-trivial blockers |
 
 ---
 
-## Limitaciones
+## Limitations
 
-### Del filtro AI
+### Of the AI filter
 
-- **Modelo 7B en CPU es lento**: ~5-10 min por chunk de 25 jobs. Día 1 tarda ~2h 30min total. Aceptable porque es batch nocturno.
-- **A veces el modelo omite decisiones**: en el Día 1 real (448 jobs), 62 jobs (~14%) no recibieron decisión en el JSON output. Quedan como passthrough (mostrados en email, no persistidos). Lean-inclusive por diseño.
-- **Patrón Compliance**: con `qwen2.5:7b`, los roles de Compliance en bancos/fondos a veces se descartan a pesar de estar en STRONG KEEP. Mejoró notablemente con `preferences.md` explícito pero no es 100% fiable. Modelos más grandes (qwen2.5:14b, gpt-oss:20b) deberían arreglar esto a costa de más latencia.
-- **Sin retry para passthroughs**: jobs con `ai_keep=NULL` no se reprocesan en runs posteriores. Caducan por la ventana de 7 días.
+- **7B model on CPU is slow**: ~5-10 min per 25-job chunk. Day 1 takes ~2h 30min end-to-end. Acceptable because it's a nightly batch.
+- **The model sometimes drops decisions**: on the real Day 1 (448 jobs), 62 jobs (~14%) didn't get a decision in the JSON output. They stay as passthrough (shown in email, not persisted). Lean-inclusive by design.
+- **Compliance pattern**: with `qwen2.5:7b`, Compliance roles at banks/funds are occasionally dropped despite being in STRONG KEEP. Improved a lot with an explicit `preferences.md` but it's not 100% reliable. Larger models (`qwen2.5:14b`, `gpt-oss:20b`) should fix this at the cost of more latency.
+- **No retry for passthroughs**: jobs with `ai_keep=NULL` aren't reprocessed in later runs. They expire from the 7-day window naturally.
 
-### De los scrapers
+### Of the scrapers
 
-- **Cloudflare hard**: Bain está totalmente bloqueado (incluso real-Chrome + stealth). Necesitaría `cloudscraper` o `undetected-chromedriver`.
-- **HTTP/2 errors**: BNP Paribas CIB aborta la conexión incluso con HTTP/2 deshabilitado. Sin solución actual.
-- **iCIMS sub-frame**: Arthur D. Little renderiza dentro de un iframe que sólo se sirve con cierto Referer/cookie state. Pendiente.
-- **Verificación manual de cada empresa**: cada portal nuevo requiere debugging individual. `src/debug_one.py` y `src/diagnose.py` ayudan, pero no es trivial.
+- **Hard Cloudflare**: Bain is fully blocked (even real-Chrome + stealth). Would need `cloudscraper` or `undetected-chromedriver`.
+- **HTTP/2 errors**: BNP Paribas CIB aborts the connection even with HTTP/2 disabled. No current fix.
+- **iCIMS sub-frame**: Arthur D. Little renders inside an iframe that's only served with specific Referer/cookie state. Pending.
+- **Manual verification per company**: each new portal takes individual debugging. `src/debug_one.py` and `src/diagnose.py` help, but it isn't trivial.
 
-### Del scheduling
+### Of the scheduling
 
-- **PC requerido encendido + sesión iniciada**: `LogonType=Interactive`. No corre con sesión cerrada o PC apagado/hibernado, sólo a la próxima vez que se inicie sesión.
-- **Sin retry automático en errores transitorios**: si Ollama no responde una vez, el filter pasa todo como passthrough y el email va sin filtrar (fail-open). Mejorable.
-- **Supabase free tier pausa proyectos** tras 7 días sin actividad. Con el daily run esto no debería pasar, pero hay que restaurar manualmente si ocurre.
+- **PC required on + user logged in**: `LogonType=Interactive`. Doesn't run with the session signed out or with the PC fully off/hibernating — only on next sign-in.
+- **No automatic retry on transient errors**: if Ollama doesn't respond once, the filter passes everything through (fail-open) and the email goes out unfiltered. Improvable.
+- **Supabase free tier pauses projects** after 7 days of inactivity. With the daily run this shouldn't happen, but you have to restore manually if it does.
 
-### De la calidad del filtro
+### Of the filter quality
 
-- **Depende fuertemente de `preferences.md`**: con un fichero vago el modelo será permisivo. Con uno demasiado restrictivo, perderá marginales. Iterar el fichero observando el output real.
-- **No hay feedback loop**: si el modelo descarta una oferta interesante, no hay forma de marcar y reentrenarlo. Sería interesante un mecanismo "no, esta sí era buena" → ajusta prefs automáticamente.
-
----
-
-## Pendientes / ideas
-
-- [ ] **Retry para passthroughs**: en cada run, también pasar por el filter los jobs con `ai_keep=NULL` (no sólo los `all_new`).
-- [ ] **Bain via cloudscraper**: probar `curl_cffi` o `cloudscraper` para el bypass de Cloudflare.
-- [ ] **Feedback loop**: link en el email para marcar "esta sí era buena" o "esta no" → ajusta `preferences.md` automáticamente.
-- [ ] **Modelo más grande**: probar `qwen2.5:14b` (si la RAM permite) o `gpt-oss:20b` con quantization para arreglar el Compliance miss.
-- [ ] **Frontend interactivo**: actualmente sólo emails. Una página Next.js con dashboard de jobs activos / archive / search.
-- [ ] **Filtros server-side por empresa**: algunas empresas exponen filtros en URL (location, role) que no aprovecho. Reduciría el tiempo de scrape.
-- [ ] **Reintentos exponenciales** para errores de red transitorios en scrapers Playwright.
+- **Heavily dependent on `preferences.md`**: with a vague file the model will be permissive. With one that's too restrictive, you'll miss marginals. Iterate on the file by watching real output.
+- **No feedback loop**: if the model drops an interesting role, there's no way to flag it and retrain. A "no, this one was actually good" mechanism that auto-tunes prefs would be nice.
 
 ---
 
-## Estructura de los commits
+## Pending / ideas
 
-Si miras `git log`, el desarrollo siguió esta progresión:
-
-1. **Scaffolding inicial**: estructura básica + 3 scrapers (Greenhouse, Lever, HTML).
-2. **Verificación por empresa**: una empresa a la vez, identificar gotchas, escribir scraper custom si el genérico no servía. ~50 empresas, documentadas en `CLAUDE.md`.
-3. **Email digest plan**: diseño del pipeline diario con AI filter.
-4. **Implementación inicial con Anthropic SDK**: filter via API Claude Sonnet 4.6.
-5. **Swap a Ollama local**: para no pagar por inferencia. Mismo contrato, infra distinta.
-6. **Refactor a filter-only-on-delta**: el insight clave — sólo filtrar jobs nuevos vs DB ayer, persistir decisiones. Reduce Día N de ~2h a ~10 min.
-7. **Validación end-to-end**: smoke test, e2e_small, Día 1 completo.
-
-Cada paso commiteado por separado, con mensaje describiendo qué y por qué.
+- [ ] **Retry passthroughs**: in each run, also pipe jobs with `ai_keep=NULL` through the filter (not only `all_new`).
+- [ ] **Bain via cloudscraper**: try `curl_cffi` or `cloudscraper` for the Cloudflare bypass.
+- [ ] **Feedback loop**: links in the email to mark "this one was good" or "this one wasn't" → auto-tune `preferences.md`.
+- [ ] **Larger model**: try `qwen2.5:14b` (if RAM permits) or `gpt-oss:20b` quantized to fix the Compliance miss.
+- [ ] **Interactive frontend**: currently email-only. A Next.js dashboard with active jobs / archive / search.
+- [ ] **Server-side filters per company**: some companies expose URL filters (location, role) I'm not using. Would cut down scrape time.
+- [ ] **Exponential retries** for transient network errors in the Playwright scrapers.
 
 ---
 
-## Licencia
+## Commit history
 
-Proyecto personal. Sin licencia explícita. Si te sirve de inspiración para tu propio tracker, adelante — pero el `config/preferences.md` es mío y los scrapers están afinados para portales que me interesan a mí; tu kilometraje variará.
+If you peek at `git log`, development followed this progression:
+
+1. **Initial scaffolding**: basic structure + 3 scrapers (Greenhouse, Lever, HTML).
+2. **Per-company verification**: one company at a time, identify gotchas, write a custom scraper if the generic one doesn't cut it. ~50 companies, documented in `CLAUDE.md`.
+3. **Email digest plan**: design of the daily pipeline with AI filter.
+4. **Initial implementation with Anthropic SDK**: filter via the Claude Sonnet 4.6 API.
+5. **Swap to local Ollama**: to avoid paying for inference. Same contract, different infra.
+6. **Refactor to filter-only-on-delta**: the key insight — only filter URLs that are new vs yesterday, persist decisions. Cuts Day N from ~2h to ~10 min.
+7. **End-to-end validation**: smoke test, e2e_small, full Day 1.
+
+Each step committed separately, with a message explaining what and why.
+
+---
+
+## License
+
+Personal project. No explicit license. If it inspires your own tracker, go for it — but `config/preferences.md` is mine and the scrapers are tuned for portals I care about; your mileage will vary.
